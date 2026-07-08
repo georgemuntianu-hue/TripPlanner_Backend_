@@ -1,27 +1,31 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import path from 'path';
 
-// Citeste fisierul .env din radacina de unde ruleaza terminalul
-dotenv.config();
+// Îi spunem exact unde să caute fișierul .env ca să nu se mai piardă
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
+// Crearea pool-ului de conexiuni
 const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASS,
+    password: process.env.DB_PASS || '826257ronaldo', // Hardcode de siguranță dacă dotenv dă rateu
     database: process.env.DB_NAME || 'tripplanner',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
 });
 
-export const testConnection = async () => {
+// Functia de test
+export async function testConnection() {
     try {
-        // Ruleaza un test simplu in baza de date
-        await pool.query('SELECT 1 + 1 AS result');
-        console.log('✅ Conexiunea la baza de date MySQL a reusit cu succes!');
+        const connection = await pool.getConnection();
+        await connection.query('SELECT 1');
+        connection.release();
+        console.log('Conectat la MySQL');
     } catch (error) {
-        console.error('❌ Eroare la conectarea bazei de date MySQL:', error.message);
+        console.error('Eroare la conectarea bazei de date MySQL:', error.message);
     }
-};
+}
 
 export default pool;
