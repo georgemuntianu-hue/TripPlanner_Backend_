@@ -1,23 +1,24 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { testConnection } from './config/db.js'; // <-- Importam testul bazei de date
 
-// Încarcă variabilele din fișierul .env
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Aplica middleware-urile globale
 app.use(cors());
 app.use(express.json());
 
-// Endpoint GET /health
+// Ruta de test pentru sanatatea serverului
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });
 
-// Pornirea serverului
+// !!! APELAM CONFIGURAREA DE MYSQL INAINTE DE LISTEN !!!
+testConnection();
+
 app.listen(PORT, () => {
     console.log(`Serverul ruleaza pe portul ${PORT}`);
 });
