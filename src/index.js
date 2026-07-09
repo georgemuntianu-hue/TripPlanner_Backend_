@@ -1,32 +1,22 @@
 import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
-import pool, { testConnection } from './config/db.js';
-import authRouter from './routes/auth.js';
+import cors from 'cors';
+import authRoutes from './routes/auth.js';
 
 dotenv.config();
 
 const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+// Satisface afișarea interfeței din folderul public
+app.use(express.static('public'));
+
+app.use('/api/auth', authRoutes);
+
 const PORT = process.env.PORT || 3001;
 
-// Permitem doar frontend-ului nostru de pe portul 3000 să acceseze datele
-app.use(cors({ origin: 'http://localhost:3000' }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// RUTA PRINCIPALĂ DE AUTENTIFICARE (Cerința 8 din task)
-app.use('/api/auth', authRouter);
-
-// Rută simplă de health check
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', database: 'connected' });
+app.listen(PORT, () => {
+    console.log(`[BACKEND] Serverul rulează pe http://localhost:${PORT}`);
 });
-
-async function pornireAplicatie() {
-    await testConnection();
-    app.listen(PORT, () => {
-        console.log(`🚀 [BACKEND] Serverul rulează curat pe http://localhost:${PORT}`);
-    });
-}
-
-pornireAplicatie();

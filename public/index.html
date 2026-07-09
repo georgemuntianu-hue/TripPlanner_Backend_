@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>Frontend - Status Conexiuni</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 50px;
+            background-color: #f8f9fa;
+            display: flex;
+            justify-content: center;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            max-width: 450px;
+            width: 100%;
+        }
+
+        h2 {
+            color: #333;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+
+        .status-box {
+            padding: 15px;
+            border-radius: 6px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 16px;
+            background: #e8f4fd;
+            color: #0056b3;
+            border-left: 5px solid #0056b3;
+        }
+
+        .btn {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 12px 20px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+            .btn:hover {
+                background-color: #0056b3;
+            }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>🖥️ Panou Control Frontend</h2>
+        <div class="status-box">🌐 Aplicația rulează pe: http://localhost:3001</div>
+        <div class="status-box" style="background:#e6f4ea; color:#1e7e34; border-left-color:#28a745;">🔌 Backend conectat pe: http://localhost:3001</div>
+        <br>
+        <a href="formular.html" class="btn">Mergi la Tab Formular 👤</a>
+    </div>
+</body>
+</html>
