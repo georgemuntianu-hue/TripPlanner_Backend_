@@ -9,7 +9,7 @@ router.post('/register', async (req, res) => {
     let { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-        return res.status(400).json({ message: 'Toate câmpurile sunt obligatorii.' });
+        return res.status(400).json({ message: 'Toate campurile sunt obligatorii.' });
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -18,7 +18,7 @@ router.post('/register', async (req, res) => {
     }
 
     if (password.length < 6) {
-        return res.status(400).json({ message: 'Parola trebuie să aibă minim 6 caractere.' });
+        return res.status(400).json({ message: 'Parola trebuie sa aiba minim 6 caractere.' });
     }
 
     name = name.trim();
@@ -55,7 +55,7 @@ router.post('/register', async (req, res) => {
 
     } catch (error) {
         console.error(error);
-        return res.status(500).json({ message: 'Eroare internă de server.' });
+        return res.status(500).json({ message: 'Eroare interna de server.' });
     }
 });
 
