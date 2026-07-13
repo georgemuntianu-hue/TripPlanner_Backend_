@@ -1,0 +1,165 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "TripPlanner API",
+    "version": "1.0.0",
+    "description": "Documentația API completă pentru rutele de Autentificare și CRUD Trips"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3001"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Introdu doar token-ul tău JWT primit la login în casetă."
+      }
+    }
+  },
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "summary": "Autentificare utilizator",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "example": "muntianugeorge31@gmail.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "parola123"
+                  }
+                },
+                "required": [ "email", "password" ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Autentificare reușită" }
+        }
+      }
+    },
+    "/api/trips": {
+      "get": {
+        "summary": "Obține toate călătoriile utilizatorului autentificat",
+        "security": [ { "BearerAuth": [] } ],
+        "responses": {
+          "200": { "description": "Listă returnată cu succes" }
+        }
+      },
+      "post": {
+        "summary": "Adaugă o călătorie nouă",
+        "security": [ { "BearerAuth": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "destination": {
+                    "type": "string",
+                    "example": "Maldive"
+                  },
+                  "start_date": {
+                    "type": "string",
+                    "example": "2026-08-01"
+                  },
+                  "end_date": {
+                    "type": "string",
+                    "example": "2026-08-10"
+                  },
+                  "preferences": {
+                    "type": "object",
+                    "example": {
+                      "hotel": "5 stele",
+                      "transport": "avion"
+                    }
+                  }
+                },
+                "required": [ "destination", "start_date", "end_date" ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Călătorie creată cu succes" }
+        }
+      }
+    },
+    "/api/trips/{id}": {
+      "get": {
+        "summary": "Detaliile unei singure călătorii",
+        "security": [ { "BearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Detalii returnate" }
+        }
+      },
+      "put": {
+        "summary": "Actualizează o călătorie existentă",
+        "security": [ { "BearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "destination": {
+                    "type": "string",
+                    "example": "Maldive Luxury"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Actualizat cu succes" }
+        }
+      },
+      "delete": {
+        "summary": "Șterge o călătorie",
+        "security": [ { "BearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Șters cu succes" }
+        }
+      }
+    }
+  }
+}
