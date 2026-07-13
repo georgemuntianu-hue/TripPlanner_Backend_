@@ -38,7 +38,6 @@ router.get('/:id', async (req, res) => {
         const { id } = req.params;
         const userId = req.userId;
 
-        // Verificăm direct ID-ul tripului ȘI ownership-ul în același query pentru a da direct 404
         const [trips] = await db.query('SELECT * FROM trips WHERE id = ? AND user_id = ?', [id, userId]);
         if (trips.length === 0) {
             return res.status(404).json({ message: 'Trip-ul nu a fost găsit sau nu aveți acces.' });
@@ -57,12 +56,18 @@ router.get('/:id', async (req, res) => {
 });
 
 // 4. POST /api/trips: validare (destination obligatoriu, end_date > start_date, max 14 zile), inserare, returneaza 201 cu trip-ul creat.
+// 4. POST /api/trips: creare călătorie nouă
 router.post('/', async (req, res) => {
     try {
         const { destination, start_date, end_date, preferences } = req.body;
-        const userId = req.userId;
 
-        // Validare obligatorie
+        // Extragere sigură a ID-ului utilizatorului
+        const userId = req.userId || (req.user && req.user.id) || (req.user && req.user.userId) || req.id;
+
+        if (!userId) {
+            return res.status(401).json({ message: 'Eroare de autentificare. ID-ul utilizatorului nu a putut fi extras.' });
+        }
+
         if (!destination) {
             return res.status(400).json({ message: 'Destinația este obligatorie' });
         }
@@ -70,34 +75,59 @@ router.post('/', async (req, res) => {
         const start = new Date(start_date);
         const end = new Date(end_date);
 
-        // Validare checklist: end_date > start_date
         if (end <= start) {
             return res.status(400).json({ message: 'end_date trebuie sa fie mai mare decat start_date' });
         }
 
-        // Validare checklist: max 14 zile
-        const differenceInDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24));
-        if (differenceInDays > 14) {
+        // Calculăm numărul de zile incluzive (ex: 1 august - 10 august înseamnă 10 zile de vacanță)
+        const differenceInTime = end.getTime() - start.getTime();
+        const totalDays = Math.ceil(differenceInTime / (1000 * 3600 * 24)) + 1;
+
+        if (totalDays > 14) {
             return res.status(400).json({ message: 'Călătoria nu poate depăși maximum 14 zile' });
         }
 
-        // preferences se stocheaza ca JSON string
         const preferencesString = preferences ? JSON.stringify(preferences) : '{}';
 
-        const [result] = await db.query(
+        // 1. Inserăm călătoria în tabelul `trips`
+        const [tripResult] = await db.query(
             'INSERT INTO trips (user_id, destination, start_date, end_date, preferences) VALUES (?, ?, ?, ?, ?)',
             [userId, destination, start_date, end_date, preferencesString]
         );
 
-        // Returneaza 201 cu trip-ul creat
+        const newTripId = tripResult.insertId;
+        const generatedDays = [];
+
+        // 2. Buclă care generează automat fiecare zi în baza de date
+        for (let i = 1; i <= totalDays; i++) {
+            const [dayResult] = await db.query(
+                'INSERT INTO days (trip_id, day_number, morning, afternoon, evening, activities) VALUES (?, ?, ?, ?, ?, ?)',
+                [newTripId, i, 'Planifică dimineața...', 'Planifică amiaza...', 'Planifică seara...', `Activități Ziua ${i}`]
+            );
+
+            // Salvăm structura ca să o returnăm frumos în răspuns
+            generatedDays.push({
+                id: dayResult.insertId,
+                trip_id: newTripId,
+                day_number: i,
+                morning: 'Planifică dimineața...',
+                afternoon: 'Planifică amiaza...',
+                evening: 'Planifică seara...',
+                activities: `Activități Ziua ${i}`
+            });
+        }
+
+        // 3. Returnăm călătoria creată cu TOATE zilele generate automat
         res.status(201).json({
-            id: result.insertId,
+            id: newTripId,
             user_id: userId,
             destination,
             start_date,
             end_date,
-            preferences: preferences || {}
+            preferences: preferences || {},
+            days: generatedDays
         });
+
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -110,7 +140,6 @@ router.put('/:id', async (req, res) => {
         const { destination, start_date, end_date, preferences } = req.body;
         const userId = req.userId;
 
-        // Verificăm ownership. Dacă nu există sau nu e al lui -> 404
         const [trips] = await db.query('SELECT * FROM trips WHERE id = ? AND user_id = ?', [id, userId]);
         if (trips.length === 0) {
             return res.status(404).json({ message: 'Trip-ul nu a fost găsit sau nu aveți acces.' });
@@ -118,7 +147,6 @@ router.put('/:id', async (req, res) => {
 
         const preferencesString = preferences ? JSON.stringify(preferences) : undefined;
 
-        // Actualizăm câmpurile trimise folosind COALESCE
         await db.query(
             `UPDATE trips 
        SET destination = COALESCE(?, destination), 
@@ -129,7 +157,6 @@ router.put('/:id', async (req, res) => {
             [destination, start_date, end_date, preferencesString, id, userId]
         );
 
-        // Preluăm trip-ul proaspăt modificat din DB pentru a-l returna (Cerința exactă din pasul 5!)
         const [updatedTrips] = await db.query('SELECT * FROM trips WHERE id = ?', [id]);
         const updatedTrip = updatedTrips[0];
         updatedTrip.preferences = updatedTrip.preferences ? JSON.parse(updatedTrip.preferences) : {};
@@ -146,17 +173,65 @@ router.delete('/:id', async (req, res) => {
         const { id } = req.params;
         const userId = req.userId;
 
-        // Verificăm ownership -> 404 dacă nu e al lui
         const [trips] = await db.query('SELECT * FROM trips WHERE id = ? AND user_id = ?', [id, userId]);
         if (trips.length === 0) {
             return res.status(404).json({ message: 'Trip-ul nu a fost găsit sau nu aveți acces.' });
         }
 
-        // Ștergem manual din tabelul asociat "days" pentru a simula comportamentul de CASCADE cerut în checklist
         await db.query('DELETE FROM days WHERE trip_id = ?', [id]);
         await db.query('DELETE FROM trips WHERE id = ?', [id]);
 
         res.json({ success: true, message: 'Trip sters si zilele asociate automat (CASCADE).' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ==========================================
+// 🚀 NOUA RUTĂ: Editare manuală a unei zile dintr-un trip
+// ==========================================
+// 1. Adaoga ruta PUT /api/trips/:id/days/:dayId in trips.js
+router.put('/:id/days/:dayId', async (req, res) => {
+    try {
+        const { id: tripId, dayId } = req.params;
+        const { morning, afternoon, evening, activities } = req.body;
+        const userId = req.userId;
+
+        // 2. Verifica mai intai ca trip-ul apartine utilizatorului autentificat printr-un JOIN cu tabelul trips.
+        // 3. Verifica ca ziua exista si apartine trip-ului specificat (Returneaza 404 daca dayId nu exista sau nu apartine).
+        const [check] = await db.query(
+            `SELECT d.* 
+       FROM days d
+       JOIN trips t ON d.trip_id = t.id
+       WHERE d.id = ? AND d.trip_id = ? AND t.user_id = ?`,
+            [dayId, tripId, userId]
+        );
+
+        if (check.length === 0) {
+            return res.status(404).json({ message: 'Ziua nu a fost găsită sau nu aveți acces la acest trip.' });
+        }
+
+        // 4. Actualizeaza doar campurile trimise folosind COALESCE(?, coloana) — daca valoarea trimisa e NULL/undefined, se pastreaza cea existenta.
+        await db.query(
+            `UPDATE days 
+       SET morning = COALESCE(?, morning),
+           afternoon = COALESCE(?, afternoon),
+           evening = COALESCE(?, evening),
+           activities = COALESCE(?, activities)
+       WHERE id = ?`,
+            [
+                morning !== undefined ? morning : null,
+                afternoon !== undefined ? afternoon : null,
+                evening !== undefined ? evening : null,
+                activities !== undefined ? activities : null,
+                dayId
+            ]
+        );
+
+        // 5. Returneaza ziua actualizata complet
+        const [updatedDays] = await db.query('SELECT * FROM days WHERE id = ?', [dayId]);
+
+        res.json(updatedDays[0]);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
