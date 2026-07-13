@@ -5,55 +5,30 @@ import db from '../config/db.js';
 
 const router = express.Router();
 
-<<<<<<< Updated upstream
-=======
 // POST /api/auth/register
->>>>>>> Stashed changes
 router.post('/register', async (req, res) => {
     try {
         const { name, email, password } = req.body;
 
-        if (!email || !password) {
-            return res.status(400).json({ message: 'Email-ul și parola sunt obligatorii.' });
+        if (!name || !email || !password) {
+            return res.status(400).json({ message: 'Toate câmpurile sunt obligatorii.' });
         }
 
-        const [existingUsers] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
-        if (existingUsers.length > 0) {
+        const [existingUser] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+        if (existingUser.length > 0) {
             return res.status(400).json({ message: 'Acest email este deja înregistrat.' });
         }
 
-        const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         await db.query(
             'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
-            [name || 'Utilizator', email, hashedPassword]
+            [name, email, hashedPassword]
         );
 
-<<<<<<< Updated upstream
-        const userId = result.insertId;
-        const jwtSecret = process.env.JWT_SECRET || 'secret_trip_planner';
-        const jwtExpires = process.env.JWT_EXPIRES_IN || '1d';
-
-        const token = jwt.sign(
-            { userId: userId, email: email },
-            jwtSecret,
-            { expiresIn: jwtExpires }
-        );
-
-        return res.status(201).json({
-            token,
-            user: { id: userId, name, email }
-        });
-
+        res.status(201).json({ message: 'Utilizator înregistrat cu succes.' });
     } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Eroare internă de server.' });
-=======
-        res.status(201).json({ success: true, message: 'Cont creat cu succes!' });
-    } catch (error) {
-        console.error('❌ EROARE COMPLETĂ REGISTER:', error);
-        res.status(500).json({ message: 'Eroare internă la înregistrare.', error: error.message });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -68,33 +43,27 @@ router.post('/login', async (req, res) => {
 
         const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
         if (users.length === 0) {
-            return res.status(401).json({ message: 'Email sau parolă incorectă.' });
+            return res.status(400).json({ message: 'Date de autentificare invalide.' });
         }
 
         const user = users[0];
-
-        // Verificare compatibilă cu bcrypt și fallback text simplu
-        const isPasswordValid = (password === user.password) || await bcrypt.compare(password, user.password).catch(() => false);
-
+        const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
-            return res.status(401).json({ message: 'Email sau parolă incorectă.' });
+            return res.status(400).json({ message: 'Date de autentificare invalide.' });
         }
 
         const token = jwt.sign(
-            { id: user.id, email: user.email },
-            process.env.JWT_SECRET || 'secret_trip_planner',
+            { userId: user.id },
+            process.env.JWT_SECRET || 'secret_cheie_trip',
             { expiresIn: '24h' }
         );
 
-        res.status(200).json({
-            success: true,
+        res.json({
             token,
             user: { id: user.id, name: user.name, email: user.email }
         });
     } catch (error) {
-        console.error('❌ EROARE COMPLETĂ LOGIN:', error);
-        res.status(500).json({ message: 'Eroare internă de server.', error: error.message });
->>>>>>> Stashed changes
+        res.status(500).json({ error: error.message });
     }
 });
 
