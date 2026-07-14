@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 // Importăm rutele noastre
 import authRoutes from './routes/auth.js';
 import tripRoutes from './routes/trips.js';
+import placesRoutes from './routes/places.js';
 
 dotenv.config();
 
@@ -35,6 +36,7 @@ if (fs.existsSync(swaggerPath)) {
 // 7. Montăm routerele la căile potrivite
 app.use('/api/auth', authRoutes);
 app.use('/api/trips', tripRoutes); // Pasul cerut explicit în task!
+app.use('/api/places', placesRoutes);
 
 // Rută simplă de test pentru a vedea dacă serverul e activ
 app.get('/', (req, res) => {

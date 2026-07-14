@@ -220,14 +220,12 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "ID-ul călătoriei",
             "schema": { "type": "integer" }
           },
           {
             "name": "dayId",
             "in": "path",
             "required": true,
-            "description": "ID-ul unic al zilei din tabelul days",
             "schema": { "type": "integer" }
           }
         ],
@@ -260,8 +258,76 @@
           }
         },
         "responses": {
-          "200": { "description": "Ziua a fost actualizată parțial cu succes folosind COALESCE" },
-          "404": { "description": "Ziua nu există sau nu aparține trip-ului / utilizatorului" }
+          "200": { "description": "Ziua a fost actualizată" }
+        }
+      }
+    },
+    "/api/places": {
+      "get": {
+        "tags": [ "Places" ],
+        "summary": "Obține locurile salvate de utilizator (cu destinația călătoriei)",
+        "security": [ { "bearerAuth": [] } ],
+        "responses": {
+          "200": { "description": "Listă locuri salvate cu succes" }
+        }
+      },
+      "post": {
+        "tags": [ "Places" ],
+        "summary": "Adaugă un loc salvat nou (Obiectiv/Restaurant)",
+        "security": [ { "bearerAuth": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [ "name" ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Restaurant La Turn"
+                  },
+                  "description": {
+                    "type": "string",
+                    "example": "Mâncare tradițională cu vedere panoramică"
+                  },
+                  "address": {
+                    "type": "string",
+                    "example": "Str. Principală Nr. 5"
+                  },
+                  "trip_id": {
+                    "type": "integer",
+                    "example": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Loc salvat cu succes" },
+          "400": { "description": "Numele lipsește" },
+          "403": { "description": "Călătoria (trip_id) specificată nu aparține utilizatorului" }
+        }
+      }
+    },
+    "/api/places/{id}": {
+      "delete": {
+        "tags": [ "Places" ],
+        "summary": "Șterge un loc salvat",
+        "security": [ { "bearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID-ul locului salvat",
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Locul a fost șters cu succes" },
+          "403": { "description": "Nu ai permisiunea sau locul nu există" }
         }
       }
     }
