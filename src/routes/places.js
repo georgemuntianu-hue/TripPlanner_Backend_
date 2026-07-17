@@ -1,87 +1,87 @@
+// server/src/routes/places.js
 import express from 'express';
-import db from '../config/db.js'; // Ajustează calea către fișierul tău de configurare bază de date dacă diferă
+import db from '../config/db.js';
 import authMiddleware from '../middleware/auth.js';
 
 const router = express.Router();
 
-// 1. Aplicăm authMiddleware global pe toate rutele din acest fișier
+// Protejăm rutele de places cu middleware-ul de autentificare
 router.use(authMiddleware);
 
-// 2. GET /api/places - Returnează locurile utilizatorului autentificat cu LEFT JOIN spre trips
+// Helper pentru a extrage userId în siguranță
+const getUserIdFromReq = (req) => {
+    return req.userId || (req.user && req.user.id) || (req.user && req.user.userId) || req.id || (req.decoded && req.decoded.id);
+};
+
+// 1. GET /api/places - Citește toate locurile utilizatorului din MySQL
 router.get('/', async (req, res) => {
     try {
-        const userId = req.userId;
+        const userId = getUserIdFromReq(req);
+        const tripId = req.query.trip_id;
 
-        const query = `
-      SELECT p.*, t.destination AS trip_destination 
-      FROM places p
-      LEFT JOIN trips t ON p.trip_id = t.id
-      WHERE p.user_id = ?
-    `;
-        const [places] = await db.query(query, [userId]);
+        let query = 'SELECT * FROM places WHERE user_id = ?';
+        let queryParams = [userId];
 
+        // Dacă trimitem trip_id din frontend, filtrăm locurile doar pentru acea călătorie
+        if (tripId) {
+            query += ' AND trip_id = ?';
+            queryParams.push(tripId);
+        }
+
+        query += ' ORDER BY id DESC'; // Cele mai noi primele (prepend behavior)
+
+        const [places] = await db.query(query, queryParams);
         res.json(places);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// 3. POST /api/places - Creează un loc salvat nou
+// 2. POST /api/places - Salvează un loc nou în MySQL (Global sau asociat unui Trip/Day)
 router.post('/', async (req, res) => {
     try {
-        const userId = req.userId;
-        const { name, description, address, trip_id } = req.body;
+        const userId = getUserIdFromReq(req);
+        const { name, description, trip_id, day_number } = req.body;
 
-        // Validare: Numele este obligatoriu
         if (!name) {
-            return res.status(400).json({ message: 'Numele locului este obligatoriu' });
+            return res.status(400).json({ message: 'Numele locației este obligatoriu.' });
         }
 
-        // Dacă trip_id este furnizat, verificăm ownership-ul (să aparțină utilizatorului)
-        if (trip_id) {
-            const [trip] = await db.query('SELECT user_id FROM trips WHERE id = ?', [trip_id]);
-
-            if (trip.length === 0 || trip[0].user_id !== userId) {
-                return res.status(403).json({ message: 'Călătoria specificată nu îți aparține!' });
-            }
-        }
-
-        // Inserare în baza de date
         const [result] = await db.query(
-            'INSERT INTO places (user_id, name, description, address, trip_id) VALUES (?, ?, ?, ?, ?)',
-            [userId, name, description || null, address || null, trip_id || null]
+            'INSERT INTO places (user_id, trip_id, day_number, name, description) VALUES (?, ?, ?, ?, ?)',
+            [userId, trip_id || null, day_number || null, name, description || '']
         );
 
+        // Returnăm obiectul proaspăt creat cu ID-ul generat de SQL
         res.status(201).json({
             id: result.insertId,
             user_id: userId,
+            trip_id: trip_id || null,
+            day_number: day_number || null,
             name,
-            description: description || null,
-            address: address || null,
-            trip_id: trip_id || null
+            description: description || ''
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// 4. DELETE /api/places/:id - Șterge un loc salvat verificând ownership-ul
+// 3. DELETE /api/places/:id - Șterge un rând din tabela `places` pe baza ID-ului
 router.delete('/:id', async (req, res) => {
     try {
-        const userId = req.userId;
+        const userId = getUserIdFromReq(req);
         const placeId = req.params.id;
 
-        // Verificăm dacă locul există și aparține utilizatorului autentificat
-        const [place] = await db.query('SELECT user_id FROM places WHERE id = ?', [placeId]);
+        const [result] = await db.query(
+            'DELETE FROM places WHERE id = ? AND user_id = ?',
+            [placeId, userId]
+        );
 
-        if (place.length === 0 || place[0].user_id !== userId) {
-            return res.status(403).json({ message: 'Nu ai permisiunea să ștergi acest loc sau locul nu există' });
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Locația nu a fost găsită sau nu îți aparține.' });
         }
 
-        // Ștergem locul
-        await db.query('DELETE FROM places WHERE id = ?', [placeId]);
-
-        res.status(200).json({ message: 'Locul a fost șters cu succes' });
+        res.json({ message: 'Locația a fost ștearsă cu succes din MySQL!' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

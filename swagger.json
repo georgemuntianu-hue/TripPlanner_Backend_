@@ -222,6 +222,28 @@
         }
       }
     },
+    "/api/trips/{id}/generate": {
+      "post": {
+        "tags": [ "Trips" ],
+        "summary": "Generează itinerar automat cu OpenAI (Task #73208)",
+        "description": "Șterge zilele vechi asociate călătoriei și populează din nou tabela `days` cu date generate structurat folosind gpt-4o-mini.",
+        "security": [ { "bearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "ID-ul călătoriei"
+          }
+        ],
+        "responses": {
+          "200": { "description": "Itinerar generat și salvat cu succes" },
+          "503": { "description": "Serviciul de AI este temporar indisponibil" },
+          "500": { "description": "Eroare internă sau eroare la salvarea în baza de date" }
+        }
+      }
+    },
     "/api/trips/{id}/days/{dayId}": {
       "put": {
         "tags": [ "Trips" ],
@@ -263,6 +285,10 @@
                   "activities": {
                     "type": "string",
                     "example": "Plan general alternativ"
+                  },
+                  "tip_of_the_day": {
+                    "type": "string",
+                    "example": "O recomandare locală utilă"
                   }
                 }
               }
@@ -277,8 +303,17 @@
     "/api/places": {
       "get": {
         "tags": [ "Places" ],
-        "summary": "Obține locurile salvate de utilizator (cu destinația călătoriei)",
+        "summary": "Obține locurile salvate de utilizator",
         "security": [ { "bearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer" },
+            "description": "Filtrează locurile după ID-ul călătoriei"
+          }
+        ],
         "responses": {
           "200": { "description": "Listă locuri salvate cu succes" }
         }
@@ -308,6 +343,10 @@
                     "example": "Str. Principală Nr. 5"
                   },
                   "trip_id": {
+                    "type": "integer",
+                    "example": 1
+                  },
+                  "day_number": {
                     "type": "integer",
                     "example": 1
                   }

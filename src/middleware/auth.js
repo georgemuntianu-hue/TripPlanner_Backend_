@@ -2,25 +2,24 @@ import jwt from 'jsonwebtoken';
 
 const authMiddleware = (req, res, next) => {
     try {
-        // 1. Extrage antetul de autorizare
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ message: 'Token lipsă sau format invalid.' });
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
+
+        if (!token) {
+            console.error("[Auth Middleware]: Cerere respinsă - lipsește Token-ul!");
+            return res.status(401).json({ message: 'Token de autentificare lipsă.' });
         }
 
-        // 2. Extrage token-ul propriu-zis
-        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_cheie');
 
-        // 3. Verifică și decodifică token-ul JWT
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_cheie_trip');
+        // Salvăm ID-ul utilizatorului în mod redundant ca să funcționeze pe toate rutele
+        req.userId = decoded.id;
+        req.user = { id: decoded.id, email: decoded.email };
 
-        // 4. IMPORTANT: Salvăm ID-ul în ambele formate (userId și id) ca să fim siguri că rutele îl găsesc
-        req.userId = decoded.userId || decoded.id;
-        req.user = { id: decoded.userId || decoded.id };
-
-        next(); // Trecem la următoarea funcție/rută
+        next();
     } catch (error) {
-        return res.status(401).json({ message: 'Token invalid sau expirat.', error: error.message });
+        console.error("[Auth Middleware Error]: Token invalid sau expirat!");
+        return res.status(401).json({ message: 'Sesiune expirată sau token invalid.' });
     }
 };
 
