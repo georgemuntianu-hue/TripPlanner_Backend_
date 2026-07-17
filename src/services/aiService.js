@@ -1,75 +1,46 @@
-// Cale salvare: server/src/services/aiService.js
+import fetch from 'node-fetch';
 
-/**
- * Simulează un răspuns inteligent de la AI pentru a ocoli limitările de API
- */
-export const generateItinerary = async (trip) => {
-    try {
-        console.log(`[AI Mock] Se generează itinerarul pentru ${trip.destination}...`);
+export const generateItinerary = async (tripData, lang) => {
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    const daysCount = tripData.days_count || 8;
 
-        // Simulăm o întârziere de 1.5 secunde pentru a imita un apel real de rețea
-        await new Promise(resolve => setTimeout(resolve, 1500));
+    // Contextul aplicației integrat în prompt
+    const appContext = `
+    Numele aplicației: TripPlanner.
+    Funcționalitate: Aplicație inteligentă de planificare a vacanțelor.
+    Utilizatorul poate genera itinerarii pe zile, salva locații preferate și personaliza vacanța în funcție de buget și preferințe.
+    Dacă utilizatorul are nevoie de asistență, recomandă-i să trimită un email la contact@travelplanner.ro.`;
 
-        const destination = trip.destination || "Destinație de vis";
-        const start = new Date(trip.start_date || trip.startDate || Date.now());
-        const end = new Date(trip.end_date || trip.endDate || Date.now());
-        const totalDays = Math.ceil((end - start) / (1000 * 3600 * 24)) + 1 || 3;
+    const prompt = `
+    ${appContext}
+    Ești ghidul turistic expert al TripPlanner. Creează un itinerariu complet de ${daysCount} zile pentru: ${tripData.destination}.
+    Preferințe utilizator: ${tripData.preferences || 'Nespecificat'}.
+    Limba de răspuns obligatorie: ${lang === 'ro' ? 'română' : 'engleză'}.
 
-        // Generăm dinamic zilele de itinerar în funcție de destinația primită
-        const generatedDays = [];
+    INSTRUCȚIUNE STRICTĂ: Generează un itinerariu detaliat pentru TOATE cele ${daysCount} zile. Nu sări nicio zi.
+    Returnează răspunsul DOAR în format JSON, cu structura: 
+    { 
+      "days": [
+        { "dayNumber": 1, "morning": "...", "afternoon": "...", "evening": "...", "tips": "..." },
+        ... (până la ziua ${daysCount})
+      ] 
+    }`;
 
-        // Am eliminat spațiul din numele variabilei de mai jos:
-        const activitatiInFunctieDeDestinatie = {
-            morning: [
-                `Mic dejun tradițional și plimbare prin centrul istoric din ${destination}.`,
-                `Vizită la principalele muzee și puncte de atracție din zonă.`,
-                `Explorarea piețelor locale și degustare de produse specifice.`
-            ],
-            afternoon: [
-                `Prânz la un restaurant local recomandat și sesiune de shopping de suveniruri.`,
-                `Tur ghidat prin cele mai cunoscute monumente istorice din ${destination}.`,
-                `O plimbare relaxantă într-un parc faimos sau o croazieră scurtă.`
-            ],
-            evening: [
-                `Cină romantică cu preparate tradiționale și băuturi locale.`,
-                `Plimbare de seară pentru a admira arhitectura iluminată din ${destination}.`,
-                `Relaxare la o terasă cochetă sau participarea la un eveniment local.`
-            ],
-            tips: [
-                "Folosește transportul în comun local, este mult mai ieftin și rapid!",
-                "Încearcă să ai întotdeauna niște bani cash la tine pentru micile cumpărături.",
-                "Rezervă biletele online din timp ca să eviți cozile mari de la intrare."
-            ]
-        };
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${GROQ_API_KEY}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            model: "llama-3.3-70b-versatile",
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" }
+        })
+    });
 
-        for (let i = 1; i <= totalDays; i++) {
-            const index = (i - 1) % 3; // Rotim activitățile ca să fie diferite de la o zi la alta
-            generatedDays.push({
-                day_number: i,
-                title: `Ziua ${i}: Descoperă farmecul din ${destination}`,
-                morning: activitatiInFunctieDeDestinatie.morning[index],
-                afternoon: activitatiInFunctieDeDestinatie.afternoon[index],
-                evening: activitatiInFunctieDeDestinatie.evening[index],
-                tips: activitatiInFunctieDeDestinatie.tips[index]
-            });
-        }
+    const data = await response.json();
+    if (data.error) throw new Error(`Eroare Groq: ${data.error.message}`);
 
-        const mockResponse = {
-            days: generatedDays
-        };
-
-        console.log("[AI Mock] Itinerar simulat cu succes:", mockResponse);
-        return mockResponse;
-
-    } catch (error) {
-        console.error("Eroare la generarea mock-ului AI:", error);
-        throw new Error("Serviciul de generare AI este temporar indisponibil.");
-    }
-};
-
-/**
- * Lăsăm și buildPrompt-ul exportat ca să nu dea erori de import în rute
- */
-export const buildPrompt = (trip) => {
-    return `Mock prompt pentru ${trip.destination}`;
+    return JSON.parse(data.choices[0].message.content);
 };
