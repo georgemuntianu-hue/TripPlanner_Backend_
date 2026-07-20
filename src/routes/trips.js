@@ -25,19 +25,19 @@ const formatTripData = (trip) => {
 };
 
 // GET /api/trips - Toate călătoriile utilizatorului
-router.get('/', async (req, res) => {
+router.get('/', async (req, res, next) => {
     try {
         const userId = getUserIdFromReq(req);
         const [trips] = await db.query('SELECT * FROM trips WHERE user_id = ? ORDER BY start_date ASC', [userId]);
         const formattedTrips = trips.map(trip => formatTripData(trip));
         res.json(formattedTrips);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        next(error); // 🌟 PASUL 2: Trimitem eroarea către middleware-ul global
     }
 });
 
 // GET /api/trips/:id - Detalii călătorie + Zile
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req, res, next) => {
     try {
         const userId = getUserIdFromReq(req);
         const tripId = req.params.id;
@@ -62,12 +62,12 @@ router.get('/:id', async (req, res) => {
 
         res.json(trip);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        next(error); // 🌟 PASUL 2
     }
 });
 
 // POST /api/trips - Creare călătorie
-router.post('/', async (req, res) => {
+router.post('/', async (req, res, next) => {
     try {
         const { destination, start_date, end_date, preferences, prefs, budget } = req.body;
         const userId = getUserIdFromReq(req);
@@ -97,12 +97,12 @@ router.post('/', async (req, res) => {
         res.status(201).json({ id: newTripId, destination });
     } catch (error) {
         console.error("Eroare la crearea trip-ului în MySQL:", error);
-        res.status(500).json({ error: error.message });
+        next(error); // 🌟 PASUL 2
     }
 });
 
 // PUT /api/trips/:id/days/:dayNumber - Actualizează activități
-router.put('/:id/days/:dayNumber', async (req, res) => {
+router.put('/:id/days/:dayNumber', async (req, res, next) => {
     try {
         const tripId = req.params.id;
         const dayNumber = req.params.dayNumber;
@@ -118,12 +118,12 @@ router.put('/:id/days/:dayNumber', async (req, res) => {
         }
         res.json({ message: 'Activitățile au fost salvate.' });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        next(error); // 🌟 PASUL 2
     }
 });
 
 // POST /api/trips/:id/generate - Generare itinerar cu Groq
-router.post('/:id/generate', async (req, res) => {
+router.post('/:id/generate', async (req, res, next) => {
     try {
         const tripId = req.params.id;
         const userId = getUserIdFromReq(req);
@@ -162,12 +162,44 @@ router.post('/:id/generate', async (req, res) => {
             }
             await db.query('UPDATE trips SET status = ? WHERE id = ?', ['generated', tripId]);
         } catch (dbError) {
-            return res.status(500).json({ error: "Eroare la salvarea în baza de date." });
+            return next(dbError);
         }
 
         res.json({ message: "Itinerariu generat!", days: generatedDays });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        next(error); // 🌟 PASUL 2
+    }
+});
+
+// DELETE /api/trips/:id - Ștergere călătorie
+router.delete('/:id', async (req, res, next) => {
+    try {
+        const tripId = req.params.id;
+        const userId = getUserIdFromReq(req);
+
+        // 1. Verificăm dacă trip-ul aparține utilizatorului curent
+        const [trips] = await db.query('SELECT * FROM trips WHERE id = ? AND user_id = ?', [tripId, userId]);
+        if (trips.length === 0) {
+            return res.status(404).json({ message: 'Călătoria nu a fost găsită sau nu aveți permisiunea de a o șterge.' });
+        }
+
+        // 2. Ștergem locurile salvate asociate călătoriei
+        try {
+            await db.query('DELETE FROM places WHERE trip_id = ?', [tripId]);
+        } catch (e) {
+            console.log("Notă: Nu au fost găsite locuri salvate de șters.");
+        }
+
+        // 3. Ștergem zilele asociate din tabelul days
+        await db.query('DELETE FROM days WHERE trip_id = ?', [tripId]);
+
+        // 4. Ștergem călătoria propriu-zisă
+        await db.query('DELETE FROM trips WHERE id = ? AND user_id = ?', [tripId, userId]);
+
+        res.json({ message: 'Călătoria a fost ștearsă cu succes!' });
+    } catch (error) {
+        console.error("Eroare la ștergerea călătoriei:", error);
+        next(error); // 🌟 PASUL 2
     }
 });
 

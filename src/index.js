@@ -43,6 +43,18 @@ app.get('/', (req, res) => {
     res.send('Serverul TripPlanner rulează corect!');
 });
 
+// 🌟 PASUL 1 DIN TASK: Global Error Handler Middleware
+// OBLIGATORIU: Trebuie montat DUPA toate rutele și să aibă exact 4 parametri (err, req, res, next)
+app.use((err, req, res, next) => {
+    // Loghează eroarea în consolă pentru debug
+    console.error("❌ [Global Server Error]:", err.stack || err.message || err);
+
+    // Returnează cod HTTP 500 cu un mesaj generic, FĂRĂ a expune stack trace-ul intern
+    res.status(500).json({
+        error: "A apărut o eroare internă de server. Vă rugăm să încercați mai târziu."
+    });
+});
+
 // Pornire server
 app.listen(PORT, () => {
     console.log(`Serverul rulează pe http://localhost:${PORT}`);
