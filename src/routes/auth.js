@@ -5,33 +5,58 @@ import db from '../config/db.js';
 
 const router = express.Router();
 
+// Cheie secretă unificată pentru tot proiectul
+const JWT_SECRET = process.env.JWT_SECRET || 'secret_cheie';
+
 // 1. REGISTER
 router.post('/register', async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { name, username, fullName, email, password } = req.body;
 
-        if (!name || !email || !password) {
+        // Preluăm numele indiferent dacă frontend-ul trimite name, username sau fullName
+        const finalName = name || username || fullName;
+
+        if (!finalName || !email || !password) {
             return res.status(400).json({ message: 'Toate câmpurile sunt obligatorii.' });
         }
 
-        const [existing] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+        const cleanEmail = email.trim().toLowerCase();
+
+        // Verificăm dacă emailul există deja
+        const [existing] = await db.query('SELECT * FROM users WHERE email = ?', [cleanEmail]);
         if (existing.length > 0) {
             return res.status(400).json({ message: 'Acest email este deja înregistrat.' });
         }
 
+        // Criptăm parola
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        // Inserăm în MySQL
         const [result] = await db.query(
             'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
-            [name.trim(), email.trim(), hashedPassword]
+            [finalName.trim(), cleanEmail, hashedPassword]
         );
 
-        res.status(201).json({
+        const newUserId = result.insertId;
+
+        // Generăm token-ul pentru logare automată imediat după înregistrare
+        const token = jwt.sign(
+            { id: newUserId, userId: newUserId, email: cleanEmail, name: finalName },
+            JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        return res.status(201).json({
             message: 'Cont creat cu succes!',
-            userId: result.insertId
+            token,
+            user: { id: newUserId, name: finalName, email: cleanEmail }
         });
+
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("❌ Eroare Register:", error);
+        return res.status(500).json({
+            error: 'Eroare la crearea contului: ' + (error.sqlMessage || error.message)
+        });
     }
 });
 
@@ -44,7 +69,9 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ message: 'Email și parola sunt obligatorii.' });
         }
 
-        const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+        const cleanEmail = email.trim().toLowerCase();
+
+        const [users] = await db.query('SELECT * FROM users WHERE email = ?', [cleanEmail]);
         if (users.length === 0) {
             return res.status(400).json({ message: 'Email sau parolă incorectă.' });
         }
@@ -55,33 +82,35 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ message: 'Email sau parolă incorectă.' });
         }
 
+        // Generare Token
         const token = jwt.sign(
-            { id: user.id, email: user.email, name: user.name },
-            process.env.JWT_SECRET || 'secret_cheie',
+            { id: user.id, userId: user.id, email: user.email, name: user.name },
+            JWT_SECRET,
             { expiresIn: '24h' }
         );
 
-        res.status(200).json({
+        return res.status(200).json({
             token,
             user: { id: user.id, name: user.name, email: user.email }
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("❌ Eroare Login:", error);
+        return res.status(500).json({ error: 'Eroare la autentificare.' });
     }
 });
 
 // 3. ȘTERGERE CONT
 router.delete('/delete-account', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        const token = authHeader && authHeader.split(' ')[1];
+        const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+        const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : authHeader;
 
         if (!token) {
             return res.status(401).json({ message: 'Token de autentificare lipsă.' });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_cheie');
-        const userId = decoded.id;
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const userId = decoded.id || decoded.userId;
 
         const [trips] = await db.query('SELECT id FROM trips WHERE user_id = ?', [userId]);
         const tripIds = trips.map(t => t.id);
@@ -101,7 +130,8 @@ router.delete('/delete-account', async (req, res) => {
         return res.status(200).json({ message: 'Contul și toate datele tale asociate au fost șterse definitiv.' });
 
     } catch (error) {
-        return res.status(500).json({ error: error.message });
+        console.error("❌ Eroare Ștergere Cont:", error);
+        return res.status(500).json({ error: 'A apărut o eroare la ștergerea contului.' });
     }
 });
 

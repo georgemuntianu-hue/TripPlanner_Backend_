@@ -1,4 +1,4 @@
-import 'dotenv/config'; // Încarcă variabilele de mediu imediat
+import 'dotenv/config'; // Încarcă variabilele de mediu
 import express from 'express';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
@@ -19,8 +19,11 @@ const PORT = process.env.PORT || 3001;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Middleware-uri esențiale
-app.use(cors());
+// Middleware-uri esențiale (Permite conexiuni din orice origine pentru rețeaua locală/mobil)
+app.use(cors({
+    origin: '*',
+    credentials: true
+}));
 app.use(express.json());
 
 // Montăm routerele (o singură dată, ordonate)
@@ -43,8 +46,8 @@ app.get('/', (req, res) => {
     res.send('Serverul TripPlanner rulează corect!');
 });
 
-// 🌟 PASUL 1 DIN TASK: Global Error Handler Middleware
-// OBLIGATORIU: Trebuie montat DUPA toate rutele și să aibă exact 4 parametri (err, req, res, next)
+// 🌟 Global Error Handler Middleware
+// OBLIGATORIU: Trebuie montat DUPĂ toate rutele și să aibă exact 4 parametri
 app.use((err, req, res, next) => {
     // Loghează eroarea în consolă pentru debug
     console.error("❌ [Global Server Error]:", err.stack || err.message || err);
@@ -55,8 +58,8 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Pornire server
-app.listen(PORT, () => {
-    console.log(`Serverul rulează pe http://localhost:${PORT}`);
-    console.log(`Documentația Swagger la http://localhost:${PORT}/api-docs`);
+// Pornire server pe host-ul universal 0.0.0.0 (accesibil din rețeaua locală / mobil)
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Serverul rulează pe portul ${PORT} (0.0.0.0:${PORT})`);
+    console.log(`📖 Documentația Swagger la http://localhost:${PORT}/api-docs`);
 });

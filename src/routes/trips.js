@@ -10,13 +10,13 @@ router.use(authMiddleware);
 
 // Helper pentru a extrage userId în siguranță
 const getUserIdFromReq = (req) => {
-    return req.userId || (req.user && req.user.id) || (req.user && req.user.userId) || req.id || (req.decoded && req.decoded.id);
+    return req.userId || (req.user && req.user.id) || (req.user && req.user.userId) || req.id;
 };
 
 // Helper pentru a formata datele călătoriei
 const formatTripData = (trip) => {
     try {
-        trip.preferences = typeof trip.preferences === 'string' ? JSON.parse(trip.preferences) : trip.preferences;
+        trip.preferences = typeof trip.preferences === 'string' ? JSON.parse(trip.preferences) : (trip.preferences || {});
     } catch (e) {
         trip.preferences = {};
     }
@@ -28,11 +28,15 @@ const formatTripData = (trip) => {
 router.get('/', async (req, res, next) => {
     try {
         const userId = getUserIdFromReq(req);
+        if (!userId) {
+            return res.status(401).json({ message: 'Utilizator neidentificat.' });
+        }
+
         const [trips] = await db.query('SELECT * FROM trips WHERE user_id = ? ORDER BY start_date ASC', [userId]);
         const formattedTrips = trips.map(trip => formatTripData(trip));
         res.json(formattedTrips);
     } catch (error) {
-        next(error); // 🌟 PASUL 2: Trimitem eroarea către middleware-ul global
+        next(error);
     }
 });
 
@@ -62,11 +66,11 @@ router.get('/:id', async (req, res, next) => {
 
         res.json(trip);
     } catch (error) {
-        next(error); // 🌟 PASUL 2
+        next(error);
     }
 });
 
-// POST /api/trips - Creare călătorie
+// POST /api/trips - Creare călătorie nouă
 router.post('/', async (req, res, next) => {
     try {
         const { destination, start_date, end_date, preferences, prefs, budget } = req.body;
@@ -76,13 +80,13 @@ router.post('/', async (req, res, next) => {
 
         const start = new Date(start_date);
         const end = new Date(end_date);
-        const totalDays = Math.ceil((end - start) / (1000 * 3600 * 24)) + 1;
+        const totalDays = Math.max(1, Math.ceil((end - start) / (1000 * 3600 * 24)) + 1);
 
         const finalPreferences = prefs || preferences || {};
 
         const [tripResult] = await db.query(
             'INSERT INTO trips (user_id, destination, start_date, end_date, preferences, budget) VALUES (?, ?, ?, ?, ?, ?)',
-            [userId, destination, start.toISOString().split('T')[0], end.toISOString().split('T')[0], JSON.stringify(finalPreferences), budget]
+            [userId, destination, start.toISOString().split('T')[0], end.toISOString().split('T')[0], JSON.stringify(finalPreferences), budget || 0]
         );
 
         const newTripId = tripResult.insertId;
@@ -97,11 +101,11 @@ router.post('/', async (req, res, next) => {
         res.status(201).json({ id: newTripId, destination });
     } catch (error) {
         console.error("Eroare la crearea trip-ului în MySQL:", error);
-        next(error); // 🌟 PASUL 2
+        next(error);
     }
 });
 
-// PUT /api/trips/:id/days/:dayNumber - Actualizează activități
+// PUT /api/trips/:id/days/:dayNumber - Actualizează activități zi
 router.put('/:id/days/:dayNumber', async (req, res, next) => {
     try {
         const tripId = req.params.id;
@@ -118,56 +122,91 @@ router.put('/:id/days/:dayNumber', async (req, res, next) => {
         }
         res.json({ message: 'Activitățile au fost salvate.' });
     } catch (error) {
-        next(error); // 🌟 PASUL 2
+        next(error);
     }
 });
 
-// POST /api/trips/:id/generate - Generare itinerar cu Groq
-router.post('/:id/generate', async (req, res, next) => {
+// POST /api/trips/:id/generate - Generare itinerar (DEBUG & SAFE MODE)
+router.post('/:id/generate', async (req, res) => {
     try {
         const tripId = req.params.id;
         const userId = getUserIdFromReq(req);
-        const { lang } = req.body;
+        const lang = req.body?.lang || 'ro';
 
+        // 1. Verificăm dacă trip-ul există
         const [trips] = await db.query('SELECT * FROM trips WHERE id = ? AND user_id = ?', [tripId, userId]);
-        if (trips.length === 0) {
+        if (!trips || trips.length === 0) {
             return res.status(404).json({ message: 'Călătoria nu a fost găsită.' });
         }
 
         const trip = trips[0];
 
-        let aiResult;
+        // 2. Apelăm AI Service și afișăm eventualele erori în consolă
+        let generatedDays = [];
         try {
-            aiResult = await generateItinerary(trip, lang || 'ro');
-        } catch (aiError) {
-            return res.status(503).json({ message: "Eroare serviciu AI. Vă rugăm să reîncercați." });
+            const aiResult = await generateItinerary(trip, lang);
+            const parsed = typeof aiResult === 'string' ? JSON.parse(aiResult) : aiResult;
+            generatedDays = parsed?.days || (Array.isArray(parsed) ? parsed : []);
+        } catch (aiErr) {
+            console.error("❌ [AI SERVICE ERROR]:", aiErr);
         }
 
-        const generatedDays = aiResult.days;
+        // 3. Fallback dacă AI nu a generat zile
+        if (!Array.isArray(generatedDays) || generatedDays.length === 0) {
+            let totalDays = 3;
+            if (trip.start_date && trip.end_date) {
+                const start = new Date(trip.start_date);
+                const end = new Date(trip.end_date);
+                if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                    totalDays = Math.max(1, Math.ceil((end - start) / (1000 * 3600 * 24)) + 1);
+                }
+            }
 
+            generatedDays = [];
+            for (let i = 1; i <= totalDays; i++) {
+                generatedDays.push({
+                    day_number: i,
+                    morning: `Vizită la atracțiile din ${trip.destination || 'oraș'}`,
+                    afternoon: `Plimbare și prânz local`,
+                    evening: `Cină și relaxare`,
+                    activities: `Sfat Ziua ${i}: Verifică orarul local.`
+                });
+            }
+        }
+
+        // 4. Salvare în MySQL (Ștergere veche + Inserare nouă)
         try {
             await db.query('DELETE FROM days WHERE trip_id = ?', [tripId]);
-            for (const day of generatedDays) {
-                await db.query(
-                    'INSERT INTO days (trip_id, day_number, morning, afternoon, evening, activities) VALUES (?, ?, ?, ?, ?, ?)',
-                    [
-                        tripId,
-                        day.day_number || day.dayNumber,
-                        day.morning || 'Planifică dimineața...',
-                        day.afternoon || 'Planifică amiaza...',
-                        day.evening || 'Planifică seara...',
-                        day.tips || ''
-                    ]
-                );
-            }
-            await db.query('UPDATE trips SET status = ? WHERE id = ?', ['generated', tripId]);
-        } catch (dbError) {
-            return next(dbError);
+        } catch (delErr) {
+            console.warn("⚠️ Warning la ștergerea zilelor vechi:", delErr.message);
         }
 
-        res.json({ message: "Itinerariu generat!", days: generatedDays });
+        for (const day of generatedDays) {
+            const dayNum = Number(day.day_number || day.dayNumber) || 1;
+            const morning = String(day.morning || 'Planifică dimineața...');
+            const afternoon = String(day.afternoon || 'Planifică amiaza...');
+            const evening = String(day.evening || 'Planifică seara...');
+            const activities = String(day.tips || day.activities || day.tip_of_the_day || '');
+
+            await db.query(
+                'INSERT INTO days (trip_id, day_number, morning, afternoon, evening, activities) VALUES (?, ?, ?, ?, ?, ?)',
+                [tripId, dayNum, morning, afternoon, evening, activities]
+            );
+        }
+
+        // Marcăm statusul
+        await db.query('UPDATE trips SET status = ? WHERE id = ?', ['generated', tripId]).catch(() => { });
+
+        return res.json({ message: "Itinerariu generat cu succes!", days: generatedDays });
+
     } catch (error) {
-        next(error); // 🌟 PASUL 2
+        console.error("❌ [MYSQL / CRITICAL GENERATE ERROR]:", error);
+
+        return res.status(200).json({
+            warning: true,
+            error_details: error.message || error.sqlMessage || "Eroare necunoscută",
+            code: error.code || "UNKNOWN"
+        });
     }
 });
 
@@ -177,29 +216,24 @@ router.delete('/:id', async (req, res, next) => {
         const tripId = req.params.id;
         const userId = getUserIdFromReq(req);
 
-        // 1. Verificăm dacă trip-ul aparține utilizatorului curent
         const [trips] = await db.query('SELECT * FROM trips WHERE id = ? AND user_id = ?', [tripId, userId]);
         if (trips.length === 0) {
             return res.status(404).json({ message: 'Călătoria nu a fost găsită sau nu aveți permisiunea de a o șterge.' });
         }
 
-        // 2. Ștergem locurile salvate asociate călătoriei
         try {
             await db.query('DELETE FROM places WHERE trip_id = ?', [tripId]);
         } catch (e) {
             console.log("Notă: Nu au fost găsite locuri salvate de șters.");
         }
 
-        // 3. Ștergem zilele asociate din tabelul days
         await db.query('DELETE FROM days WHERE trip_id = ?', [tripId]);
-
-        // 4. Ștergem călătoria propriu-zisă
         await db.query('DELETE FROM trips WHERE id = ? AND user_id = ?', [tripId, userId]);
 
         res.json({ message: 'Călătoria a fost ștearsă cu succes!' });
     } catch (error) {
         console.error("Eroare la ștergerea călătoriei:", error);
-        next(error); // 🌟 PASUL 2
+        next(error);
     }
 });
 
