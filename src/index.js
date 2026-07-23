@@ -32,6 +32,19 @@ app.use('/api/trips', tripRoutes);
 app.use('/api/places', placesRoutes);
 app.use('/api/chat', chatRoutes);
 
+// 🌟 RUTA NOUĂ: Prinde mesajele trimise din bara de jos (Footer)
+app.post('/api/contact', (req, res) => {
+    const { email, message } = req.body;
+
+    console.log(`📩 [Contact Message Received] De la: ${email} | Mesaj: ${message}`);
+
+    // Răspunde cu succes către client
+    res.status(200).json({
+        success: true,
+        message: 'Mesajul a fost recepționat cu succes!'
+    });
+});
+
 // Configurare Swagger
 const swaggerPath = path.resolve(__dirname, '../swagger.json');
 if (fs.existsSync(swaggerPath)) {
