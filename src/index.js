@@ -1,96 +1,78 @@
+import 'dotenv/config'; // Încarcă variabilele de mediu
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
-import swaggerJsdoc from 'swagger-jsdoc';
-import pool, { testConnection } from './config/db.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+// Importă rutele
+import authRoutes from './routes/auth.js';
+import tripRoutes from './routes/trips.js';
+import placesRoutes from './routes/places.js';
+import chatRoutes from './routes/chat.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// ⚠️ FOARTE IMPORTANT: CORS leagă frontend-ul de backend!
-// Permite aplicației de pe portul 3000 (frontend) să trimită date la portul 3001 (backend)
-app.use(cors({ origin: 'http://localhost:3000' }));
+// Obținem calea pentru modulele ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Middleware-uri esențiale (Permite conexiuni din orice origine pentru rețeaua locală/mobil)
+app.use(cors({
+    origin: '*',
+    credentials: true
+}));
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Configurația curată pentru Swagger
-const swaggerOptions = {
-    definition: {
-        openapi: '3.0.0',
-        info: {
-            title: 'TripPlanner API Documentation',
-            version: '1.0.0',
-            description: 'API pur (JSON) pentru proiectul TripPlanner',
-        },
-        servers: [{ url: `http://localhost:${PORT}` }],
-        paths: {
-            '/health': {
-                get: {
-                    summary: 'Verifică starea serverului',
-                    responses: { 200: { description: 'Server online.' } }
-                }
-            },
-            '/add-user': {
-                post: {
-                    summary: 'Inserează un utilizator primit din Frontend',
-                    requestBody: {
-                        required: true,
-                        content: {
-                            'application/json': {
-                                schema: {
-                                    type: 'object',
-                                    properties: {
-                                        name: { type: 'string' },
-                                        email: { type: 'string' },
-                                        password: { type: 'string' }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    responses: {
-                        201: { description: 'Utilizator creat.' },
-                        500: { description: 'Eroare bază de date.' }
-                    }
-                }
-            }
-        }
-    },
-    apis: [],
-};
+// Montăm routerele (o singură dată, ordonate)
+app.use('/api/auth', authRoutes);
+app.use('/api/trips', tripRoutes);
+app.use('/api/places', placesRoutes);
+app.use('/api/chat', chatRoutes);
 
-const swaggerSpecs = swaggerJsdoc(swaggerOptions);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
+// 🌟 RUTA NOUĂ: Prinde mesajele trimise din bara de jos (Footer)
+app.post('/api/contact', (req, res) => {
+    const { email, message } = req.body;
 
-// Ruta obligatorie
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', database: 'connected' });
-});
+    console.log(`📩 [Contact Message Received] De la: ${email} | Mesaj: ${message}`);
 
-// BACKEND PUR: Primește JSON -> Salvează -> Trimite înapoi tot JSON
-app.post('/add-user', async (req, res) => {
-    const { name, email, password } = req.body;
-    try {
-        const [result] = await pool.query(
-            'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
-            [name, email, password]
-        );
-        // Trimitem un răspuns JSON standard, nu text HTML!
-        res.status(201).json({ success: true, message: 'Utilizator salvat!', userId: result.insertId });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-async function pornireAplicatie() {
-    await testConnection();
-    app.listen(PORT, () => {
-        console.log(`[BACKEND] Serverul rulează pe http://localhost:${PORT}`);
-        console.log(`[BACKEND] Swagger disponibil la http://localhost:${PORT}/api-docs`);
+    // Răspunde cu succes către client
+    res.status(200).json({
+        success: true,
+        message: 'Mesajul a fost recepționat cu succes!'
     });
+});
+
+// Configurare Swagger
+const swaggerPath = path.resolve(__dirname, '../swagger.json');
+if (fs.existsSync(swaggerPath)) {
+    const swaggerDocument = JSON.parse(fs.readFileSync(swaggerPath, 'utf8'));
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+} else {
+    console.log("Avertisment: Fișierul swagger.json nu a fost găsit.");
 }
 
-pornireAplicatie();
+// Rută test
+app.get('/', (req, res) => {
+    res.send('Serverul TripPlanner rulează corect!');
+});
+
+// 🌟 Global Error Handler Middleware
+// OBLIGATORIU: Trebuie montat DUPĂ toate rutele și să aibă exact 4 parametri
+app.use((err, req, res, next) => {
+    // Loghează eroarea în consolă pentru debug
+    console.error("❌ [Global Server Error]:", err.stack || err.message || err);
+
+    // Returnează cod HTTP 500 cu un mesaj generic, FĂRĂ a expune stack trace-ul intern
+    res.status(500).json({
+        error: "A apărut o eroare internă de server. Vă rugăm să încercați mai târziu."
+    });
+});
+
+// Pornire server pe host-ul universal 0.0.0.0 (accesibil din rețeaua locală / mobil)
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Serverul rulează pe portul ${PORT} (0.0.0.0:${PORT})`);
+    console.log(`📖 Documentația Swagger la http://localhost:${PORT}/api-docs`);
+});

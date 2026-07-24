@@ -1,0 +1,386 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "TripPlanner API",
+    "version": "1.0.0",
+    "description": "Documentația API pentru aplicația TripPlanner"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3001"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "paths": {
+    "/api/auth/register": {
+      "post": {
+        "tags": [ "Auth" ],
+        "summary": "Înregistrare utilizator nou",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [ "name", "email", "password" ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "George"
+                  },
+                  "email": {
+                    "type": "string",
+                    "example": "george@test.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "parola123"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Utilizator înregistrat cu succes" },
+          "400": { "description": "Date invalide" }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [ "Auth" ],
+        "summary": "Autentificare utilizator",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [ "email", "password" ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "example": "george@test.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "parola123"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Autentificare reușită, returnează token" },
+          "400": { "description": "Date incorecte" }
+        }
+      }
+    },
+    "/api/auth/delete-account": {
+      "delete": {
+        "tags": [ "Auth" ],
+        "summary": "Șterge definitiv contul utilizatorului autentificat și toate datele din MySQL",
+        "security": [ { "bearerAuth": [] } ],
+        "responses": {
+          "200": { "description": "Contul și toate datele asociate au fost șterse cu succes" },
+          "401": { "description": "Token de autentificare invalid sau lipsă" },
+          "500": { "description": "Eroare internă de server la ștergere" }
+        }
+      }
+    },
+    "/api/trips": {
+      "get": {
+        "tags": [ "Trips" ],
+        "summary": "Obține toate călătoriile utilizatorului autentificat",
+        "security": [ { "bearerAuth": [] } ],
+        "responses": {
+          "200": { "description": "Listă călătorii" }
+        }
+      },
+      "post": {
+        "tags": [ "Trips" ],
+        "summary": "Creează o călătorie nouă",
+        "security": [ { "bearerAuth": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [ "destination", "start_date", "end_date" ],
+                "properties": {
+                  "destination": {
+                    "type": "string",
+                    "example": "Maldive Luxury"
+                  },
+                  "start_date": {
+                    "type": "string",
+                    "example": "2026-08-01"
+                  },
+                  "end_date": {
+                    "type": "string",
+                    "example": "2026-08-10"
+                  },
+                  "preferences": {
+                    "type": "object",
+                    "properties": {
+                      "hotel": {
+                        "type": "string",
+                        "example": "5 stele"
+                      },
+                      "transport": {
+                        "type": "string",
+                        "example": "avion"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Călătorie creată" },
+          "400": { "description": "Validare eșuată" }
+        }
+      }
+    },
+    "/api/trips/{id}": {
+      "get": {
+        "tags": [ "Trips" ],
+        "summary": "Obține detaliile unei călătorii",
+        "security": [ { "bearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Detalii călătorie" },
+          "404": { "description": "Nu a fost găsită" }
+        }
+      },
+      "put": {
+        "tags": [ "Trips" ],
+        "summary": "Actualizează o călătorie existentă",
+        "security": [ { "bearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "destination": {
+                    "type": "string",
+                    "example": "Maldive Luxury"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Actualizată cu succes" }
+        }
+      },
+      "delete": {
+        "tags": [ "Trips" ],
+        "summary": "Șterge o călătorie",
+        "security": [ { "bearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Ștearsă cu succes" }
+        }
+      }
+    },
+    "/api/trips/{id}/generate": {
+      "post": {
+        "tags": [ "Trips" ],
+        "summary": "Generează itinerar automat cu OpenAI (Task #73208)",
+        "description": "Șterge zilele vechi asociate călătoriei și populează din nou tabela `days` cu date generate structurat folosind gpt-4o-mini.",
+        "security": [ { "bearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "ID-ul călătoriei"
+          }
+        ],
+        "responses": {
+          "200": { "description": "Itinerar generat și salvat cu succes" },
+          "503": { "description": "Serviciul de AI este temporar indisponibil" },
+          "500": { "description": "Eroare internă sau eroare la salvarea în baza de date" }
+        }
+      }
+    },
+    "/api/trips/{id}/days/{dayId}": {
+      "put": {
+        "tags": [ "Trips" ],
+        "summary": "Editare manuală a unei zile dintr-o călătorie",
+        "security": [ { "bearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "dayId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "morning": {
+                    "type": "string",
+                    "example": "Mic dejun la hotel"
+                  },
+                  "afternoon": {
+                    "type": "string",
+                    "example": "Vizită Turnul Eiffel"
+                  },
+                  "evening": {
+                    "type": "string",
+                    "example": "Cină romantică"
+                  },
+                  "activities": {
+                    "type": "string",
+                    "example": "Plan general alternativ"
+                  },
+                  "tip_of_the_day": {
+                    "type": "string",
+                    "example": "O recomandare locală utilă"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Ziua a fost actualizată" }
+        }
+      }
+    },
+    "/api/places": {
+      "get": {
+        "tags": [ "Places" ],
+        "summary": "Obține locurile salvate de utilizator",
+        "security": [ { "bearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer" },
+            "description": "Filtrează locurile după ID-ul călătoriei"
+          }
+        ],
+        "responses": {
+          "200": { "description": "Listă locuri salvate cu succes" }
+        }
+      },
+      "post": {
+        "tags": [ "Places" ],
+        "summary": "Adaugă un loc salvat nou (Obiectiv/Restaurant)",
+        "security": [ { "bearerAuth": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [ "name" ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Restaurant La Turn"
+                  },
+                  "description": {
+                    "type": "string",
+                    "example": "Mâncare tradițională cu vedere panoramică"
+                  },
+                  "address": {
+                    "type": "string",
+                    "example": "Str. Principală Nr. 5"
+                  },
+                  "trip_id": {
+                    "type": "integer",
+                    "example": 1
+                  },
+                  "day_number": {
+                    "type": "integer",
+                    "example": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Loc salvat cu succes" },
+          "400": { "description": "Numele lipsește" },
+          "403": { "description": "Călătoria (trip_id) specificată nu aparține utilizatorului" }
+        }
+      }
+    },
+    "/api/places/{id}": {
+      "delete": {
+        "tags": [ "Places" ],
+        "summary": "Șterge un loc salvat",
+        "security": [ { "bearerAuth": [] } ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID-ul locului salvat",
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Locul a fost șters cu succes" },
+          "403": { "description": "Nu ai permisiunea sau locul nu există" }
+        }
+      }
+    }
+  }
+}
